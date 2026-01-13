@@ -90,6 +90,14 @@ async fn main() {
         std::process::exit(1);
     });
     let token_manager = Arc::new(token_manager);
+
+    // 启动定期余额扫描任务（如果配置了间隔时间）
+    if let Some(interval) = config.balance_check_interval {
+        if interval > 0 {
+            token_manager.start_balance_scanner(interval);
+        }
+    }
+
     let kiro_provider = KiroProvider::with_proxy(token_manager.clone(), proxy_config.clone());
 
     // 初始化 count_tokens 配置

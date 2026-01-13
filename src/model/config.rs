@@ -58,6 +58,12 @@ pub struct Config {
     /// Admin API 密钥（可选，启用 Admin API 功能）
     #[serde(default)]
     pub admin_api_key: Option<String>,
+
+    /// 余额检查间隔（秒），设置后会定期扫描所有凭据的余额
+    /// 如果余额查询失败则自动删除该凭据
+    /// 设置为 0 或不设置则禁用定期检查
+    #[serde(default)]
+    pub balance_check_interval: Option<u64>,
 }
 
 fn default_host() -> String {
@@ -107,6 +113,7 @@ impl Default for Config {
             proxy_username: None,
             proxy_password: None,
             admin_api_key: None,
+            balance_check_interval: None,
         }
     }
 }
