@@ -25,15 +25,23 @@ env:
   IMAGE_NAME: kiro-rs
 
 jobs:
-  docker:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-22.04-arm
+            arch: arm64
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -49,7 +57,6 @@ jobs:
         id: prep
         shell: bash
         env:
-          PUSH_LATEST: ${{ github.event_name == 'push' || github.event.inputs.push_latest == 'true' }}
           OWNER: ${{ github.repository_owner }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
@@ -62,27 +69,70 @@ jobs:
           owner_lower="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
           image="${{ env.REGISTRY }}/${owner_lower}/${{ env.IMAGE_NAME }}"
 
-          tags="${image}:${version},${image}:${version_without_v}"
-
-          if [[ "${PUSH_LATEST}" == "true" ]]; then
-            tags="${tags},${image}:latest"
-          fi
-
+          echo "image=${image}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "tags=${tags}" >> "${GITHUB_OUTPUT}"
+          echo "version_without_v=${version_without_v}" >> "${GITHUB_OUTPUT}"
 
-      - name: Build and push multi-arch image
+      - name: Build and push arch image
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
           provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          tags: ${{ steps.prep.outputs.tags }}
+          cache-from: type=gha,scope=docker-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.arch }}
+          tags: |
+            ${{ steps.prep.outputs.image }}:${{ steps.prep.outputs.version }}-${{ matrix.arch }}
+            ${{ steps.prep.outputs.image }}:${{ steps.prep.outputs.version_without_v }}-${{ matrix.arch }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.title=kiro-rs
             org.opencontainers.image.description=Kiro.rs Docker Image
             org.opencontainers.image.version=${{ steps.prep.outputs.version }}
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      - name: Create and push manifests
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+            push_latest="${{ github.event.inputs.push_latest }}"
+          else
+            version="${GITHUB_REF_NAME}"
+            push_latest="true"
+          fi
+
+          version_without_v="${version#v}"
+          owner_lower="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          image="${{ env.REGISTRY }}/${owner_lower}/${{ env.IMAGE_NAME }}"
+
+          docker manifest create "${image}:${version}" \
+            "${image}:${version}-amd64" \
+            "${image}:${version}-arm64"
+          docker manifest push "${image}:${version}"
+
+          docker manifest create "${image}:${version_without_v}" \
+            "${image}:${version_without_v}-amd64" \
+            "${image}:${version_without_v}-arm64"
+          docker manifest push "${image}:${version_without_v}"
+
+          if [[ "${push_latest}" == "true" ]]; then
+            docker manifest create "${image}:latest" \
+              "${image}:${version}-amd64" \
+              "${image}:${version}-arm64"
+            docker manifest push "${image}:latest"
+          fi
