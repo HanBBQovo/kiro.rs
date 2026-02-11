@@ -365,6 +365,59 @@ kiro-rs/
 RUST_LOG=debug ./target/release/kiro-rs
 ```
 
+## GitHub Tag 自动发布 Docker（推荐）
+
+项目已内置工作流：`.github/workflows/docker-build.yaml`，支持 **打 Tag 自动构建并推送多架构镜像（amd64/arm64）** 到 GHCR。
+
+### 1) 触发发布
+
+```bash
+git tag -a v2026.1.8 -m "release v2026.1.8"
+git push origin v2026.1.8
+```
+
+触发后会发布这些镜像标签：
+
+- `ghcr.io/<你的GitHub用户名>/kiro-rs:v2026.1.8`
+- `ghcr.io/<你的GitHub用户名>/kiro-rs:2026.1.8`
+- `ghcr.io/<你的GitHub用户名>/kiro-rs:latest`
+
+> 如果你想手动重发镜像，也可以在 GitHub Actions 页面手动执行 `Build and Push Docker Images`，并填写 `version`。
+
+### 2) Linux 部署（docker compose）
+
+1. 准备配置文件（与 `docker-compose.yml` 同目录）：
+   - `config.json`
+   - `credentials.json`
+2. 复制环境变量模板并填写你的镜像信息：
+
+```bash
+cp .env.example .env
+```
+
+`.env` 示例：
+
+```env
+IMAGE_OWNER=your-github-username
+IMAGE_NAME=kiro-rs
+IMAGE_TAG=v2026.1.8
+```
+
+启动：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f kiro-rs
+```
+
+> 若 GHCR 包是私有的，先执行 `docker login ghcr.io`（建议使用带 `read:packages` 权限的 PAT）。
+
 ## 注意事项
 
 1. **凭证安全**: 请妥善保管 `credentials.json` 文件，不要提交到版本控制
