@@ -50,6 +50,7 @@ jobs:
         shell: bash
         env:
           PUSH_LATEST: ${{ github.event_name == 'push' || github.event.inputs.push_latest == 'true' }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             version="${{ github.event.inputs.version }}"
@@ -58,7 +59,8 @@ jobs:
           fi
 
           version_without_v="${version#v}"
-          image="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+          owner_lower="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          image="${{ env.REGISTRY }}/${owner_lower}/${{ env.IMAGE_NAME }}"
 
           tags="${image}:${version},${image}:${version_without_v}"
 

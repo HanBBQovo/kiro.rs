@@ -403,6 +403,8 @@ IMAGE_NAME=kiro-rs
 IMAGE_TAG=v2026.1.8
 ```
 
+> 注意：`IMAGE_OWNER` 需要用小写（GHCR 仓库名必须全小写）。
+
 启动：
 
 ```bash
